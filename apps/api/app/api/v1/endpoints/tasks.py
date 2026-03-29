@@ -54,7 +54,7 @@ async def list_tasks(
         wbs_item_id=wbs_item_id,
         parent_task_id=parent_task_id,
     )
-    tasks, next_cursor, has_more = await service.list(
+    tasks, next_cursor, has_more = await service.list_tasks(
         project_id, filters, sort_by, sort_order, cursor, limit
     )
     return CursorPaginatedResponse(

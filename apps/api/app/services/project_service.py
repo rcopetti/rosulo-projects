@@ -41,7 +41,7 @@ class ProjectService:
             raise NotFoundError("Project not found")
         return project
 
-    async def list(
+    async def list_projects(
         self, org_id: UUID, status: str | None = None, methodology: str | None = None
     ) -> list[Project]:
         query = select(Project).where(Project.org_id == org_id, Project.deleted_at.is_(None))

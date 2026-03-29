@@ -43,7 +43,7 @@ class TaskService:
             raise NotFoundError("Task not found")
         return task
 
-    async def list(
+    async def list_tasks(
         self,
         project_id: UUID,
         filters: TaskFilters | None = None,

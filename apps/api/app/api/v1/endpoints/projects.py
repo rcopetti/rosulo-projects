@@ -38,7 +38,7 @@ async def list_projects(
     db: AsyncSession = Depends(get_session),
 ) -> list[ProjectResponse]:
     service = ProjectService(db)
-    projects = await service.list(org_id, status, methodology)
+    projects = await service.list_projects(org_id, status, methodology)
     return [_project_to_response(p) for p in projects]
 
 
