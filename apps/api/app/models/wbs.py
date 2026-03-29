@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import Date, DateTime, Enum, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -83,7 +83,7 @@ class Task(Base, TimestampMixin):
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     completed_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     completion_pct: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    tags: Mapped[list[str] | None] = mapped_column(default=list)
+    tags: Mapped[list | None] = mapped_column(JSONB, nullable=True, default=list)
     cursor_token: Mapped[str | None] = mapped_column(String(100), nullable=True, unique=True)
 
     project: Mapped["Project"] = relationship(back_populates="tasks")
