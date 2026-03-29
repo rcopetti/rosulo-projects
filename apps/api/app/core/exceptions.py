@@ -40,6 +40,11 @@ class UnauthorizedError(AppError):
         super().__init__(message=message, status_code=401, error_code="UNAUTHORIZED")
 
 
+class InvalidCredentialsError(AppError):
+    def __init__(self) -> None:
+        super().__init__(message="Invalid email or password", status_code=401, error_code="INVALID_CREDENTIALS")
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:

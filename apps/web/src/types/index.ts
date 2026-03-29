@@ -129,7 +129,7 @@ export interface LoginRequest {
 export interface RegisterRequest {
   email: string
   password: string
-  full_name: string
+  name: string
 }
 
 export interface AuthResponse {

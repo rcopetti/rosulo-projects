@@ -836,7 +836,8 @@ All endpoints prefixed with `/api/v1`. Auth required unless noted.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/auth/login` | Email + password login, returns JWT |
+| POST | `/auth/register` | Create account (name, email, password), returns JWT |
+| POST | `/auth/login` | Email + password login, returns JWT. Returns 401 if user does not exist or password is wrong (no distinction). |
 | POST | `/auth/refresh` | Refresh access token |
 | POST | `/auth/oauth/{provider}` | OAuth2 callback (Google, GitHub) |
 | GET | `/auth/me` | Current user profile |
@@ -1711,13 +1712,34 @@ export function useRealtime(projectId: string) {
 
 ### 7.1 Authentication
 
+#### Registration Flow
+
+```
+User Registration
+  │
+  ├── POST /auth/register {name, email, password}
+  │     │
+  │     ├── Check if email already exists ──> 409 DUPLICATE_EMAIL
+  │     ├── Hash password with bcrypt
+  │     ├── Create User record
+  │     └── Return JWT access_token + refresh_token
+  │
+  └── Frontend: show "Register" link when user has no account
+```
+
+#### Login Flow
+
 ```
 User Login
   │
-  ├── Email + Password ──> bcrypt verify ──> JWT access_token (15min)
-  │                                        ──> JWT refresh_token (7d, httpOnly cookie)
+  ├── POST /auth/login {email, password}
+  │     │
+  │     ├── User not found ──> 401 INVALID_CREDENTIALS (do not reveal if email exists)
+  │     ├── Password wrong  ──> 401 INVALID_CREDENTIALS (same error, no distinction)
+  │     ├── Account disabled ──> 401 ACCOUNT_DISABLED
+  │     └── Success ──> JWT access_token (15min) + refresh_token (7d)
   │
-  └── OAuth2 (Google/GitHub) ──> Provider callback ──> JWT pair
+  └── OAuth2 (Google/GitHub) ──> Provider callback ──> Create-or-login ──> JWT pair
 
 Every API Request:
   Authorization: Bearer <access_token>
@@ -1729,6 +1751,10 @@ Every API Request:
           ├── Load user + org membership
           └── Inject into request context
 ```
+
+> **Security note:** Login must return the same `INVALID_CREDENTIALS` error whether the email
+> does not exist or the password is wrong. This prevents user enumeration attacks.
+> If the user has no account, the frontend should display a link to the registration form.
 
 ### 7.2 Role-Based Access Control (RBAC)
 

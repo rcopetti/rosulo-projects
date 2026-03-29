@@ -2,20 +2,24 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 
 from app.core.config import settings
 from app.core.exceptions import ForbiddenError
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
-
+    pwd_bytes = password[:72].encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed_bytes = bcrypt.hashpw(pwd_bytes, salt)
+    return hashed_bytes.decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    password_byte_enc = plain_password[:72].encode('utf-8')
+    hashed_password_bytes = hashed_password.encode('utf-8')
+    try:
+        return bcrypt.checkpw(password_byte_enc, hashed_password_bytes)
+    except ValueError:
+        return False
 
 
 def create_access_token(subject: UUID, org_id: UUID | None = None) -> str:

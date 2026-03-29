@@ -13,8 +13,8 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:6010',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
+        changeOrigin: false,
+        // rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/ws': {
         target: 'ws://localhost:6010',

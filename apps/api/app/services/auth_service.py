@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import DuplicateError, NotFoundError, UnauthorizedError
+from app.core.exceptions import DuplicateError, InvalidCredentialsError, NotFoundError, UnauthorizedError
 from app.core.security import create_access_token, create_refresh_token, get_password_hash, verify_password
 from app.models.user import User
 from app.schemas.auth import TokenPair, UserCreate
@@ -33,9 +33,9 @@ class AuthService:
         result = await self.db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
         if not user or not user.hashed_password:
-            raise UnauthorizedError("Invalid credentials")
+            raise InvalidCredentialsError()
         if not verify_password(password, user.hashed_password):
-            raise UnauthorizedError("Invalid credentials")
+            raise InvalidCredentialsError()
         if not user.is_active:
             raise UnauthorizedError("Account is disabled")
         return TokenPair(
