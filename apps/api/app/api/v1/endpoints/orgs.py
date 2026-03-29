@@ -18,6 +18,27 @@ from app.services.org_service import OrgService
 router = APIRouter()
 
 
+@router.get("/users/me/orgs", response_model=list[OrgResponse])
+async def list_my_orgs(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> list[OrgResponse]:
+    service = OrgService(db)
+    orgs = await service.list_user_orgs(current_user.id)
+    return [
+        OrgResponse(
+            id=str(org.id),
+            name=org.name,
+            slug=org.slug,
+            description=org.description,
+            avatar_url=org.avatar_url,
+            created_at=org.created_at.isoformat(),
+            updated_at=org.updated_at.isoformat(),
+        )
+        for org in orgs
+    ]
+
+
 @router.post("/orgs", response_model=OrgResponse, status_code=201)
 async def create_org(
     data: OrgCreate,

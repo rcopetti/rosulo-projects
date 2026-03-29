@@ -34,7 +34,7 @@ export function CopilotPage() {
   }, [messages])
 
   function handleSend() {
-    if (!input.trim() || isStreaming) return
+    if (!input.trim() || isStreaming || !projectId) return
 
     const content = input
     setInput('')
@@ -75,6 +75,16 @@ export function CopilotPage() {
 
   return (
     <div className="flex h-[calc(100vh-12rem)] gap-4">
+      {!projectId ? (
+        <div className="flex flex-1 flex-col items-center justify-center rounded-lg border bg-card text-center">
+          <Bot className="mb-4 h-12 w-12 text-muted-foreground/50" />
+          <h3 className="text-lg font-medium">Select a project</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Open a project to use the AI copilot with project context.
+          </p>
+        </div>
+      ) : (
+      <>
       <div className="hidden w-64 flex-col rounded-lg border bg-card lg:flex">
         <div className="border-b p-3">
           <Button variant="outline" className="w-full justify-start" onClick={handleNewConversation}>
@@ -131,7 +141,7 @@ export function CopilotPage() {
           ) : (
             <div className="space-y-4">
               {messages.map((message) => (
-                <ChatMessage key={message.id} message={message} userName={user?.full_name || 'You'} />
+                <ChatMessage key={message.id} message={message} userName={user?.name || 'You'} />
               ))}
               {isStreaming && (
                 <div className="flex gap-3">
@@ -173,6 +183,8 @@ export function CopilotPage() {
           </p>
         </div>
       </div>
+      </>
+      )}
     </div>
   )
 }

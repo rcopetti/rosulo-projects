@@ -1,8 +1,11 @@
 export interface User {
   id: string
   email: string
-  full_name: string
-  avatar_url?: string
+  name: string
+  avatar_url?: string | null
+  role: string
+  is_active: boolean
+  is_verified: boolean
   created_at: string
   updated_at: string
 }
@@ -11,7 +14,10 @@ export interface Organization {
   id: string
   name: string
   slug: string
+  description: string | null
+  avatar_url: string | null
   created_at: string
+  updated_at: string
 }
 
 export interface ProjectMember {
@@ -24,16 +30,19 @@ export interface ProjectMember {
 
 export interface Project {
   id: string
+  org_id: string
   name: string
-  description: string
-  status: 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled'
-  methodology: 'waterfall' | 'agile' | 'hybrid'
-  start_date?: string
-  end_date?: string
-  budget?: number
-  organization_id: string
-  owner_id: string
-  members?: ProjectMember[]
+  description: string | null
+  methodology: 'waterfall' | 'agile' | 'hybrid' | 'prince2' | 'custom'
+  status: 'draft' | 'active' | 'on_hold' | 'completed' | 'archived'
+  priority: 'low' | 'medium' | 'high' | 'critical'
+  start_date?: string | null
+  end_date?: string | null
+  budget?: number | null
+  budget_currency?: string
+  complexity_score?: number | null
+  risk_level?: string | null
+  ai_enabled?: boolean
   created_at: string
   updated_at: string
 }
@@ -132,8 +141,8 @@ export interface RegisterRequest {
   name: string
 }
 
-export interface AuthResponse {
+export interface TokenResponse {
   access_token: string
+  refresh_token: string
   token_type: string
-  user: User
 }

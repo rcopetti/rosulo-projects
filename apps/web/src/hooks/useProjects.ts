@@ -1,14 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiPatch } from '@/lib/api/client'
+import { useAuthStore } from '@/stores/authStore'
 import type { Project, PaginatedResponse } from '@/types'
 
-export function useProjects(organizationId?: string) {
+export function useProjects(orgId?: string) {
+  const activeOrgId = useAuthStore((s) => s.activeOrgId)
+  const resolvedOrgId = orgId || activeOrgId
   return useQuery({
-    queryKey: ['projects', organizationId],
-    queryFn: async () => {
-      const params = organizationId ? `?organization_id=${organizationId}` : ''
-      return apiGet<PaginatedResponse<Project>>(`/projects${params}`)
-    },
+    queryKey: ['projects', resolvedOrgId],
+    queryFn: async () => apiGet<Project[]>(`/orgs/${resolvedOrgId}/projects`),
+    enabled: !!resolvedOrgId,
   })
 }
 
@@ -20,12 +21,15 @@ export function useProject(id: string) {
   })
 }
 
-export function useCreateProject() {
+export function useCreateProject(orgId?: string) {
   const queryClient = useQueryClient()
+  const activeOrgId = useAuthStore((s) => s.activeOrgId)
+  const resolvedOrgId = orgId || activeOrgId
   return useMutation({
-    mutationFn: async (data: Partial<Project>) => apiPost<Project>('/projects', data),
+    mutationFn: async (data: Partial<Project>) =>
+      apiPost<Project>(`/orgs/${resolvedOrgId}/projects`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      queryClient.invalidateQueries({ queryKey: ['projects', resolvedOrgId] })
     },
   })
 }

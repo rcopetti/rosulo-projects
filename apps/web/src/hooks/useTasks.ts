@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiPatch } from '@/lib/api/client'
+import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api/client'
 import type { Task, PaginatedResponse } from '@/types'
 
 export function useTasks(projectId: string, filters?: Record<string, string>) {
@@ -7,7 +7,7 @@ export function useTasks(projectId: string, filters?: Record<string, string>) {
     queryKey: ['tasks', projectId, filters],
     queryFn: async () => {
       const params = new URLSearchParams(filters)
-      return apiGet<PaginatedResponse<Task>>(
+      return apiGet<{ items: Task[]; next_cursor: string | null; has_more: boolean }>(
         `/projects/${projectId}/tasks?${params.toString()}`
       )
     },
@@ -15,11 +15,11 @@ export function useTasks(projectId: string, filters?: Record<string, string>) {
   })
 }
 
-export function useTask(projectId: string, taskId: string) {
+export function useTask(taskId: string) {
   return useQuery({
-    queryKey: ['task', projectId, taskId],
-    queryFn: async () => apiGet<Task>(`/projects/${projectId}/tasks/${taskId}`),
-    enabled: !!projectId && !!taskId,
+    queryKey: ['task', taskId],
+    queryFn: async () => apiGet<Task>(`/tasks/${taskId}`),
+    enabled: !!taskId,
   })
 }
 
@@ -38,7 +38,17 @@ export function useUpdateTask(projectId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Task> }) =>
-      apiPatch<Task>(`/projects/${projectId}/tasks/${id}`, data),
+      apiPatch<Task>(`/tasks/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', projectId] })
+    },
+  })
+}
+
+export function useDeleteTask(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => apiDelete(`/tasks/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks', projectId] })
     },

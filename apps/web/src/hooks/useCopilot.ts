@@ -2,13 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost } from '@/lib/api/client'
 import type { Conversation, Message } from '@/types'
 
-export function useConversations(projectId?: string) {
+export function useConversations(projectId: string) {
   return useQuery({
     queryKey: ['conversations', projectId],
-    queryFn: async () => {
-      const params = projectId ? `?project_id=${projectId}` : ''
-      return apiGet<Conversation[]>(`/copilot/conversations${params}`)
-    },
+    queryFn: async () =>
+      apiGet<Conversation[]>(`/copilot/conversations?project_id=${projectId}`),
+    enabled: !!projectId,
   })
 }
 
@@ -30,13 +29,13 @@ export function useSendMessage() {
       content,
     }: {
       conversationId?: string
-      projectId?: string
+      projectId: string
       content: string
     }) => {
-      return apiPost<Message>('/copilot/messages', {
+      return apiPost<{ message: string; conversation_id: string; message_id: string }>('/copilot/chat', {
         conversation_id: conversationId,
         project_id: projectId,
-        content,
+        message: content,
       })
     },
     onSuccess: (_, variables) => {

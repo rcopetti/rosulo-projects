@@ -25,7 +25,7 @@ export function useUpdateWBSItem(projectId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<WBSItem> }) =>
-      apiPatch<WBSItem>(`/projects/${projectId}/wbs/${id}`, data),
+      apiPatch<WBSItem>(`/wbs/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wbs', projectId] })
     },
@@ -35,8 +35,7 @@ export function useUpdateWBSItem(projectId: string) {
 export function useDeleteWBSItem(projectId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (id: string) =>
-      apiDelete(`/projects/${projectId}/wbs/${id}`),
+    mutationFn: async (id: string) => apiDelete(`/wbs/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wbs', projectId] })
     },

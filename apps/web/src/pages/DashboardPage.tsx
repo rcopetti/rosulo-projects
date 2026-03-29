@@ -12,14 +12,14 @@ export function DashboardPage() {
   const user = useAuthStore((s) => s.user)
   const { data: projectsData, isLoading } = useProjects()
 
-  const projects = projectsData?.items || []
+  const projects = projectsData || []
   const activeProjects = projects.filter((p) => p.status === 'active').length
   const totalProjects = projects.length
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Welcome back, {user?.full_name?.split(' ')[0]}</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Welcome back, {user?.name?.split(' ')[0]}</h1>
         <p className="text-muted-foreground">Here is an overview of your projects and activities.</p>
       </div>
 

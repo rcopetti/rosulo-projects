@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useProjects, useCreateProject } from '@/hooks/useProjects'
+import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -40,8 +41,8 @@ import { Plus } from 'lucide-react'
 const createProjectSchema = z.object({
   name: z.string().min(1, 'Project name is required'),
   description: z.string().default(''),
-  methodology: z.enum(['waterfall', 'agile', 'hybrid']),
-  status: z.enum(['planning', 'active', 'on_hold', 'completed', 'cancelled']),
+  methodology: z.enum(['waterfall', 'agile', 'hybrid', 'prince2', 'custom']),
+  status: z.enum(['draft', 'active', 'on_hold', 'completed', 'archived']),
   start_date: z.string().optional(),
   end_date: z.string().optional(),
 })
@@ -50,10 +51,11 @@ type CreateProjectForm = z.infer<typeof createProjectSchema>
 
 export function ProjectsPage() {
   const [open, setOpen] = useState(false)
+  const activeOrgId = useAuthStore((s) => s.activeOrgId)
   const { data, isLoading } = useProjects()
   const createProject = useCreateProject()
 
-  const projects = data?.items || []
+  const projects = data || []
 
   const {
     register,
@@ -65,20 +67,17 @@ export function ProjectsPage() {
     resolver: zodResolver(createProjectSchema),
     defaultValues: {
       methodology: 'agile',
-      status: 'planning',
+      status: 'draft',
     },
   })
 
   function onSubmit(data: CreateProjectForm) {
-    createProject.mutate(
-      { ...data, organization_id: 'default' },
-      {
-        onSuccess: () => {
-          reset()
-          setOpen(false)
-        },
-      }
-    )
+    createProject.mutate(data, {
+      onSuccess: () => {
+        reset()
+        setOpen(false)
+      },
+    })
   }
 
   return (
@@ -126,14 +125,15 @@ export function ProjectsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Status</Label>
-                  <Select onValueChange={(v) => setValue('status', v as any)} defaultValue="planning">
+                  <Select onValueChange={(v) => setValue('status', v as any)} defaultValue="draft">
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="planning">Planning</SelectItem>
+                      <SelectItem value="draft">Draft</SelectItem>
                       <SelectItem value="active">Active</SelectItem>
                       <SelectItem value="on_hold">On Hold</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -207,11 +207,11 @@ export function ProjectsPage() {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { variant: 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline'; label: string }> = {
+    draft: { variant: 'secondary', label: 'Draft' },
     active: { variant: 'success', label: 'Active' },
-    planning: { variant: 'secondary', label: 'Planning' },
     on_hold: { variant: 'warning', label: 'On Hold' },
     completed: { variant: 'outline', label: 'Completed' },
-    cancelled: { variant: 'destructive', label: 'Cancelled' },
+    archived: { variant: 'outline', label: 'Archived' },
   }
   const config = map[status] || { variant: 'default' as const, label: status }
   return <Badge variant={config.variant}>{config.label}</Badge>

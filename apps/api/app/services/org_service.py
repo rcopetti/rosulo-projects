@@ -91,3 +91,12 @@ class OrgService:
         if membership.role not in required_roles:
             raise ForbiddenError("Insufficient permissions")
         return membership.role
+
+    async def list_user_orgs(self, user_id: UUID) -> list[Organization]:
+        result = await self.db.execute(
+            select(Organization)
+            .join(OrgMembership, OrgMembership.org_id == Organization.id)
+            .where(OrgMembership.user_id == user_id)
+            .order_by(Organization.name)
+        )
+        return list(result.scalars().all())
