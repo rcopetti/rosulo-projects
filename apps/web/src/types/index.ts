@@ -54,6 +54,7 @@ export interface WBSItem {
   code: string
   name: string
   description?: string
+  type: string
   level: number
   sort_order: number
   budget_estimate?: number
@@ -69,23 +70,45 @@ export interface WBSTree {
   root_items: WBSItem[]
 }
 
+export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'blocked' | 'cancelled'
+export type TaskPriority = 'lowest' | 'low' | 'medium' | 'high' | 'highest'
+export type DependencyType = 'finish_to_start' | 'start_to_start' | 'finish_to_finish' | 'start_to_finish'
+
 export interface Task {
   id: string
   project_id: string
-  wbs_item_id?: string
+  wbs_item_id?: string | null
+  parent_task_id?: string | null
+  assigned_to?: string | null
   title: string
-  description?: string
-  status: 'todo' | 'in_progress' | 'review' | 'done' | 'blocked'
-  priority: 'low' | 'medium' | 'high' | 'critical'
-  assignee_id?: string
-  assignee?: User
-  estimated_hours?: number
-  actual_hours?: number
-  start_date?: string
-  due_date?: string
-  completed_at?: string
+  description?: string | null
+  status: TaskStatus
+  priority: TaskPriority
+  estimated_hours?: number | null
+  actual_hours?: number | null
+  start_date?: string | null
+  due_date?: string | null
+  completed_date?: string | null
+  completion_pct: number
+  tags?: string[] | null
   created_at: string
   updated_at: string
+}
+
+export interface TaskDependency {
+  id: string
+  predecessor_id: string
+  successor_id: string
+  type: DependencyType
+  lag_days: number
+  created_at: string
+}
+
+export interface CursorPaginatedTasks {
+  items: Task[]
+  next_cursor: string | null
+  has_more: boolean
+  total_count?: number | null
 }
 
 export interface Milestone {

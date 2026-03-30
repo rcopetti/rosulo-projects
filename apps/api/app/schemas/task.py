@@ -71,15 +71,17 @@ class TaskResponse(BaseModel):
 
 
 class TaskDependencyCreate(BaseModel):
-    depends_on_id: str
-    dependency_type: str = "finish_to_start"
+    predecessor_id: str
+    type: str = "finish_to_start"
+    lag_days: int = 0
 
 
 class TaskDependencyResponse(BaseModel):
     id: str
-    task_id: str
-    depends_on_id: str
-    dependency_type: str
+    predecessor_id: str
+    successor_id: str
+    type: str
+    lag_days: int
     created_at: str
 
     model_config = {"from_attributes": True}

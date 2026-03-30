@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import Date, Enum, ForeignKey, String, Text
+from sqlalchemy import CheckConstraint, Date, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -15,6 +15,13 @@ class MilestoneStatus(str, enum.Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     MISSED = "missed"
+
+
+class DependencyType(str, enum.Enum):
+    FINISH_TO_START = "finish_to_start"
+    START_TO_START = "start_to_start"
+    FINISH_TO_FINISH = "finish_to_finish"
+    START_TO_FINISH = "start_to_finish"
 
 
 class Milestone(Base, TimestampMixin):
@@ -34,11 +41,17 @@ class Milestone(Base, TimestampMixin):
 
 class TaskDependency(Base, TimestampMixin):
     __tablename__ = "task_dependencies"
+    __table_args__ = (
+        CheckConstraint("predecessor_id <> successor_id", name="chk_no_self_dependency"),
+    )
 
-    task_id: Mapped[uuid.UUID] = mapped_column(
+    predecessor_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False
     )
-    depends_on_id: Mapped[uuid.UUID] = mapped_column(
+    successor_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False
     )
-    dependency_type: Mapped[str] = mapped_column(String(50), nullable=False, default="finish_to_start")
+    type: Mapped[DependencyType] = mapped_column(
+        Enum(DependencyType), nullable=False, default=DependencyType.FINISH_TO_START
+    )
+    lag_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

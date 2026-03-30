@@ -5,8 +5,8 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, NotFoundError
-from app.models.schedule import TaskDependency
+from app.core.exceptions import ConflictError, DuplicateError, NotFoundError
+from app.models.schedule import DependencyType, TaskDependency
 from app.models.wbs import Task
 from app.schemas.task import TaskCreate, TaskDependencyCreate, TaskFilters, TaskUpdate
 
@@ -115,45 +115,90 @@ class TaskService:
         return task
 
     async def delete(self, task_id: UUID) -> None:
-        from datetime import datetime, timezone
-
         task = await self.get(task_id)
 
-        dependent_count = await self.db.execute(
-            select(func.count(TaskDependency.id)).where(TaskDependency.depends_on_id == task_id)
+        successors = await self.db.execute(
+            select(func.count(TaskDependency.id)).where(TaskDependency.predecessor_id == task_id)
         )
-        if (dependent_count.scalar() or 0) > 0:
-            raise ConflictError("Cannot delete task with dependent tasks")
+        if (successors.scalar() or 0) > 0:
+            raise ConflictError("Cannot delete task with successor dependencies")
 
         task.deleted_at = datetime.now(timezone.utc)
         await self.db.flush()
 
     async def add_dependency(self, task_id: UUID, data: TaskDependencyCreate) -> TaskDependency:
-        task = await self.get(task_id)
-        await self.get(UUID(data.depends_on_id))
+        predecessor_id = UUID(data.predecessor_id)
+
+        await self.get(task_id)
+        await self.get(predecessor_id)
+
+        if predecessor_id == task_id:
+            raise ConflictError("Cannot create self-dependency")
 
         existing = await self.db.execute(
             select(TaskDependency).where(
-                TaskDependency.task_id == task_id,
-                TaskDependency.depends_on_id == UUID(data.depends_on_id),
+                TaskDependency.predecessor_id == predecessor_id,
+                TaskDependency.successor_id == task_id,
             )
         )
         if existing.scalar_one_or_none():
-            from app.core.exceptions import DuplicateError
-
             raise DuplicateError("Dependency already exists")
 
+        if await self._would_create_cycle(predecessor_id, task_id):
+            raise ConflictError("Dependency would create a circular reference")
+
         dependency = TaskDependency(
-            task_id=task_id,
-            depends_on_id=UUID(data.depends_on_id),
-            dependency_type=data.dependency_type,
+            predecessor_id=predecessor_id,
+            successor_id=task_id,
+            type=DependencyType(data.type),
+            lag_days=data.lag_days,
         )
         self.db.add(dependency)
         await self.db.flush()
         return dependency
 
-    async def list_dependencies(self, task_id: UUID) -> list[TaskDependency]:
+    async def list_predecessors(self, task_id: UUID) -> list[TaskDependency]:
+        await self.get(task_id)
         result = await self.db.execute(
-            select(TaskDependency).where(TaskDependency.task_id == task_id)
+            select(TaskDependency).where(TaskDependency.successor_id == task_id)
         )
         return list(result.scalars().all())
+
+    async def list_successors(self, task_id: UUID) -> list[TaskDependency]:
+        await self.get(task_id)
+        result = await self.db.execute(
+            select(TaskDependency).where(TaskDependency.predecessor_id == task_id)
+        )
+        return list(result.scalars().all())
+
+    async def delete_dependency(self, dependency_id: UUID) -> None:
+        result = await self.db.execute(
+            select(TaskDependency).where(TaskDependency.id == dependency_id)
+        )
+        dep = result.scalar_one_or_none()
+        if not dep:
+            raise NotFoundError("Dependency not found")
+        await self.db.delete(dep)
+        await self.db.flush()
+
+    async def _would_create_cycle(self, predecessor_id: UUID, successor_id: UUID) -> bool:
+        visited: set[UUID] = set()
+        queue = [successor_id]
+
+        while queue:
+            current = queue.pop(0)
+            if current in visited:
+                continue
+            visited.add(current)
+
+            if current == predecessor_id:
+                return True
+
+            result = await self.db.execute(
+                select(TaskDependency.successor_id).where(TaskDependency.predecessor_id == current)
+            )
+            for row in result.scalars().all():
+                if row not in visited:
+                    queue.append(row)
+
+        return False

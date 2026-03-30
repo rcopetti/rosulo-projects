@@ -106,33 +106,40 @@ async def add_dependency(
 ) -> TaskDependencyResponse:
     service = TaskService(db)
     dep = await service.add_dependency(task_id, data)
-    return TaskDependencyResponse(
-        id=str(dep.id),
-        task_id=str(dep.task_id),
-        depends_on_id=str(dep.depends_on_id),
-        dependency_type=dep.dependency_type,
-        created_at=dep.created_at.isoformat(),
-    )
+    return _dep_to_response(dep)
 
 
-@router.get("/tasks/{task_id}/dependencies", response_model=list[TaskDependencyResponse])
-async def list_dependencies(
+@router.get("/tasks/{task_id}/dependencies/predecessors", response_model=list[TaskDependencyResponse])
+async def list_predecessors(
     task_id: UUID,
     _: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ) -> list[TaskDependencyResponse]:
     service = TaskService(db)
-    deps = await service.list_dependencies(task_id)
-    return [
-        TaskDependencyResponse(
-            id=str(d.id),
-            task_id=str(d.task_id),
-            depends_on_id=str(d.depends_on_id),
-            dependency_type=d.dependency_type,
-            created_at=d.created_at.isoformat(),
-        )
-        for d in deps
-    ]
+    deps = await service.list_predecessors(task_id)
+    return [_dep_to_response(d) for d in deps]
+
+
+@router.get("/tasks/{task_id}/dependencies/successors", response_model=list[TaskDependencyResponse])
+async def list_successors(
+    task_id: UUID,
+    _: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> list[TaskDependencyResponse]:
+    service = TaskService(db)
+    deps = await service.list_successors(task_id)
+    return [_dep_to_response(d) for d in deps]
+
+
+@router.delete("/tasks/{task_id}/dependencies/{dependency_id}", status_code=204)
+async def delete_dependency(
+    task_id: UUID,
+    dependency_id: UUID,
+    _: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> None:
+    service = TaskService(db)
+    await service.delete_dependency(dependency_id)
 
 
 def _task_to_response(task: any) -> TaskResponse:
@@ -155,4 +162,15 @@ def _task_to_response(task: any) -> TaskResponse:
         tags=task.tags,
         created_at=task.created_at.isoformat(),
         updated_at=task.updated_at.isoformat(),
+    )
+
+
+def _dep_to_response(dep: any) -> TaskDependencyResponse:
+    return TaskDependencyResponse(
+        id=str(dep.id),
+        predecessor_id=str(dep.predecessor_id),
+        successor_id=str(dep.successor_id),
+        type=dep.type.value if hasattr(dep.type, 'value') else dep.type,
+        lag_days=dep.lag_days,
+        created_at=dep.created_at.isoformat(),
     )

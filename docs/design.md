@@ -413,8 +413,8 @@ CREATE TABLE tasks (
     ai_estimated_duration NUMERIC(6, 1),
     ai_estimated_confidence FLOAT,
 
-    -- Dependencies
-    dependencies    JSONB DEFAULT '[]',  -- [{task_id, type: finish_to_start}]
+    -- Relations (non-blocking, reference only)
+    related_task_ids  UUID[] DEFAULT '{}',
 
     created_by      UUID REFERENCES users(id),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -443,16 +443,28 @@ CREATE TABLE milestones (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Task dependency types (PMBOK standard):
+--   FS (Finish-to-Start): successor cannot start until predecessor finishes
+--   SS (Start-to-Start): successor cannot start until predecessor starts
+--   FF (Finish-to-Finish): successor cannot finish until predecessor finishes
+--   SF (Start-to-Finish): successor cannot finish until predecessor starts (rare)
+CREATE TYPE dependency_type AS ENUM (
+    'finish_to_start', 'start_to_start', 'finish_to_finish', 'start_to_finish'
+);
+
 CREATE TABLE task_dependencies (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     predecessor_id  UUID NOT NULL REFERENCES tasks(id),
     successor_id    UUID NOT NULL REFERENCES tasks(id),
-    type            VARCHAR(30) NOT NULL DEFAULT 'finish_to_start',
-    lag_days        INTEGER DEFAULT 0,
+    type            dependency_type NOT NULL DEFAULT 'finish_to_start',
+    lag_days        INTEGER DEFAULT 0,  -- positive = delay, negative = lead
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(predecessor_id, successor_id)
+    UNIQUE(predecessor_id, successor_id),
+    CHECK (predecessor_id <> successor_id)  -- no self-dependency
 );
-```
+
+-- Validation: prevent circular dependencies via application-layer check
+-- (cannot be enforced by SQL constraints alone; use recursive traversal on insert)
 
 ### 3.5 Cost Management (EVM)
 
@@ -886,10 +898,13 @@ All endpoints prefixed with `/api/v1`. Auth required unless noted.
 | GET | `/projects/{project_id}/tasks` | List tasks (filter, sort, paginate) |
 | GET | `/tasks/{task_id}` | Get task detail |
 | PATCH | `/tasks/{task_id}` | Update task |
-| DELETE | `/tasks/{task_id}` | Soft-delete task |
+| DELETE | `/tasks/{task_id}` | Soft-delete task (409 if successor dependencies exist) |
 | POST | `/tasks/{task_id}/assign` | Assign task (AI suggestion included) |
-| POST | `/tasks/{task_id}/dependencies` | Add dependency |
-| GET | `/tasks/{task_id}/dependencies` | Get task dependencies |
+| **Dependencies** | | |
+| POST | `/tasks/{task_id}/dependencies` | Add dependency (predecessor → this task) |
+| GET | `/tasks/{task_id}/dependencies/predecessors` | Get tasks this task depends on |
+| GET | `/tasks/{task_id}/dependencies/successors` | Get tasks that depend on this task |
+| DELETE | `/tasks/{task_id}/dependencies/{dependency_id}` | Remove a dependency |
 
 #### Schedule
 
