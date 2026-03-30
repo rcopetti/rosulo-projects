@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useProjects, useCreateProject } from '@/hooks/useProjects'
+import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from '@/hooks/useProjects'
 import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Dialog,
   DialogContent,
@@ -36,9 +37,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatDate } from '@/lib/utils'
-import { Plus } from 'lucide-react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
+import type { Project } from '@/types'
 
-const createProjectSchema = z.object({
+const projectSchema = z.object({
   name: z.string().min(1, 'Project name is required'),
   description: z.string().default(''),
   methodology: z.enum(['waterfall', 'agile', 'hybrid', 'prince2', 'custom']),
@@ -47,13 +49,19 @@ const createProjectSchema = z.object({
   end_date: z.string().optional(),
 })
 
-type CreateProjectForm = z.infer<typeof createProjectSchema>
+type ProjectForm = z.infer<typeof projectSchema>
 
 export function ProjectsPage() {
-  const [open, setOpen] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingProject, setEditingProject] = useState<Project | null>(null)
+  const [deleteProject, setDeleteProject] = useState<Project | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   const activeOrgId = useAuthStore((s) => s.activeOrgId)
   const { data, isLoading } = useProjects()
   const createProject = useCreateProject()
+  const updateProject = useUpdateProject()
+  const deleteProjectMutation = useDeleteProject()
 
   const projects = data || []
 
@@ -63,22 +71,70 @@ export function ProjectsPage() {
     reset,
     setValue,
     formState: { errors },
-  } = useForm<CreateProjectForm>({
-    resolver: zodResolver(createProjectSchema),
+  } = useForm<ProjectForm>({
+    resolver: zodResolver(projectSchema),
     defaultValues: {
       methodology: 'agile',
       status: 'draft',
     },
   })
 
-  function onSubmit(data: CreateProjectForm) {
-    createProject.mutate(data, {
+  function openCreateDialog() {
+    setEditingProject(null)
+    reset({ name: '', description: '', methodology: 'agile', status: 'draft', start_date: '', end_date: '' })
+    setDialogOpen(true)
+  }
+
+  function openEditDialog(project: Project) {
+    setEditingProject(project)
+    reset({
+      name: project.name,
+      description: project.description || '',
+      methodology: project.methodology,
+      status: project.status,
+      start_date: project.start_date || '',
+      end_date: project.end_date || '',
+    })
+    setDialogOpen(true)
+  }
+
+  function onSubmit(data: ProjectForm) {
+    if (editingProject) {
+      updateProject.mutate({ id: editingProject.id, data }, {
+        onSuccess: () => {
+          reset()
+          setEditingProject(null)
+          setDialogOpen(false)
+        },
+      })
+    } else {
+      createProject.mutate(data, {
+        onSuccess: () => {
+          reset()
+          setDialogOpen(false)
+        },
+      })
+    }
+  }
+
+  function handleDelete() {
+    if (!deleteProject) return
+    setDeleteError(null)
+    deleteProjectMutation.mutate(deleteProject.id, {
       onSuccess: () => {
-        reset()
-        setOpen(false)
+        setDeleteProject(null)
+      },
+      onError: (error: any) => {
+        if (error?.response?.status === 409) {
+          setDeleteError('Cannot delete project: it has tasks or WBS items. Remove them first.')
+        } else {
+          setDeleteError('Failed to delete project. Please try again.')
+        }
       },
     })
   }
+
+  const isPending = editingProject ? updateProject.isPending : createProject.isPending
 
   return (
     <div className="space-y-6">
@@ -87,17 +143,19 @@ export function ProjectsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
           <p className="text-muted-foreground">Manage your projects and track progress.</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={openCreateDialog}>
               <Plus className="mr-2 h-4 w-4" />
               New Project
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle>Create Project</DialogTitle>
-              <DialogDescription>Add a new project to your workspace.</DialogDescription>
+              <DialogTitle>{editingProject ? 'Edit Project' : 'Create Project'}</DialogTitle>
+              <DialogDescription>
+                {editingProject ? 'Update the project details.' : 'Add a new project to your workspace.'}
+              </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-2">
@@ -149,11 +207,11 @@ export function ProjectsPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={createProject.isPending}>
-                  Create
+                <Button type="submit" disabled={isPending}>
+                  {editingProject ? 'Save Changes' : 'Create'}
                 </Button>
               </DialogFooter>
             </form>
@@ -170,6 +228,7 @@ export function ProjectsPage() {
               <TableHead>Methodology</TableHead>
               <TableHead>Start Date</TableHead>
               <TableHead>End Date</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -181,6 +240,7 @@ export function ProjectsPage() {
                     <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-8 w-20 ml-auto" /></TableCell>
                   </TableRow>
                 ))
               : projects.map((project) => (
@@ -196,11 +256,33 @@ export function ProjectsPage() {
                     <TableCell className="capitalize">{project.methodology}</TableCell>
                     <TableCell>{project.start_date ? formatDate(project.start_date) : '—'}</TableCell>
                     <TableCell>{project.end_date ? formatDate(project.end_date) : '—'}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => openEditDialog(project)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => { setDeleteError(null); setDeleteProject(project) }}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
           </TableBody>
         </Table>
       </div>
+
+      <ConfirmDialog
+        open={!!deleteProject}
+        onOpenChange={(open) => { if (!open) { setDeleteProject(null); setDeleteError(null) } }}
+        title="Delete Project"
+        description={
+          deleteError ||
+          `Are you sure you want to delete "${deleteProject?.name}"? This action cannot be undone.`
+        }
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        isPending={deleteProjectMutation.isPending}
+        variant="destructive"
+      />
     </div>
   )
 }

@@ -1,3 +1,5 @@
+from datetime import date
+
 from pydantic import BaseModel, Field
 
 
@@ -6,8 +8,8 @@ class ProjectCreate(BaseModel):
     description: str | None = None
     methodology: str = "agile"
     priority: str = "medium"
-    start_date: str | None = None
-    end_date: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
     budget: float | None = None
     budget_currency: str = "USD"
     ai_enabled: bool = False
@@ -20,8 +22,8 @@ class ProjectUpdate(BaseModel):
     methodology: str | None = None
     status: str | None = None
     priority: str | None = None
-    start_date: str | None = None
-    end_date: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
     budget: float | None = None
     budget_currency: str | None = None
     complexity_score: int | None = None

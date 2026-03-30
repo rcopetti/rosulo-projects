@@ -4,8 +4,8 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
-from app.models.wbs import WBSItem, WBSItemType
+from app.core.exceptions import ConflictError, NotFoundError
+from app.models.wbs import Task, WBSItem, WBSItemType
 from app.schemas.wbs import WBSItemCreate, WBSItemUpdate
 
 
@@ -62,11 +62,13 @@ class WBSService:
         return self._build_tree(items)
 
     def _build_tree(self, items: list[WBSItem]) -> list[WBSItem]:
+        from sqlalchemy.orm.attributes import set_committed_value
+        
         item_map: dict[UUID, WBSItem] = {item.id: item for item in items}
         roots: list[WBSItem] = []
 
         for item in items:
-            item.children = []
+            set_committed_value(item, "children", [])
 
         for item in items:
             if item.parent_id and item.parent_id in item_map:
@@ -95,6 +97,19 @@ class WBSService:
         item = result.scalar_one_or_none()
         if not item:
             raise NotFoundError("WBS item not found")
+
+        child_count_result = await self.db.execute(
+            select(func.count(WBSItem.id)).where(WBSItem.parent_id == item_id)
+        )
+        if (child_count_result.scalar() or 0) > 0:
+            raise ConflictError("Cannot delete WBS item with child items")
+
+        task_count_result = await self.db.execute(
+            select(func.count(Task.id)).where(Task.wbs_item_id == item_id, Task.deleted_at.is_(None))
+        )
+        if (task_count_result.scalar() or 0) > 0:
+            raise ConflictError("Cannot delete WBS item with linked tasks")
+
         await self._delete_recursive(item)
 
     async def _delete_recursive(self, item: WBSItem) -> None:

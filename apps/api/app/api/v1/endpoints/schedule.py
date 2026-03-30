@@ -47,14 +47,14 @@ async def update_milestone(
     return _milestone_to_response(milestone)
 
 
-@router.get("/projects/{project_id}/gantt")
-async def get_gantt_data(
-    project_id: UUID,
+@router.delete("/milestones/{milestone_id}", status_code=204)
+async def delete_milestone(
+    milestone_id: UUID,
     _: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
-) -> dict:
+) -> None:
     service = ScheduleService(db)
-    return await service.get_gantt_data(project_id)
+    await service.delete_milestone(milestone_id)
 
 
 def _milestone_to_response(milestone: any) -> MilestoneResponse:

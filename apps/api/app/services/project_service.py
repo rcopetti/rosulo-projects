@@ -1,11 +1,12 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import DuplicateError, NotFoundError
+from app.core.exceptions import ConflictError, DuplicateError, NotFoundError
 from app.models.project import Project, ProjectMembership, ProjectRole
 from app.models.user import User
+from app.models.wbs import Task, WBSItem
 from app.schemas.project import ProjectCreate, ProjectMemberCreate, ProjectUpdate
 
 
@@ -64,6 +65,19 @@ class ProjectService:
         from datetime import datetime, timezone
 
         project = await self.get(project_id)
+
+        task_count = await self.db.execute(
+            select(func.count(Task.id)).where(Task.project_id == project_id, Task.deleted_at.is_(None))
+        )
+        if (task_count.scalar() or 0) > 0:
+            raise ConflictError("Cannot delete project with existing tasks")
+
+        wbs_count = await self.db.execute(
+            select(func.count(WBSItem.id)).where(WBSItem.project_id == project_id)
+        )
+        if (wbs_count.scalar() or 0) > 0:
+            raise ConflictError("Cannot delete project with existing WBS items")
+
         project.deleted_at = datetime.now(timezone.utc)
         await self.db.flush()
 

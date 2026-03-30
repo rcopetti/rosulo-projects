@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.models.schedule import TaskDependency
 from app.models.wbs import Task
 from app.schemas.task import TaskCreate, TaskDependencyCreate, TaskFilters, TaskUpdate
@@ -118,6 +118,13 @@ class TaskService:
         from datetime import datetime, timezone
 
         task = await self.get(task_id)
+
+        dependent_count = await self.db.execute(
+            select(func.count(TaskDependency.id)).where(TaskDependency.depends_on_id == task_id)
+        )
+        if (dependent_count.scalar() or 0) > 0:
+            raise ConflictError("Cannot delete task with dependent tasks")
+
         task.deleted_at = datetime.now(timezone.utc)
         await self.db.flush()
 

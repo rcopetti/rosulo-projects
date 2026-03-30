@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiPatch } from '@/lib/api/client'
+import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api/client'
 import { useAuthStore } from '@/stores/authStore'
 import type { Project, PaginatedResponse } from '@/types'
 
@@ -42,6 +42,17 @@ export function useUpdateProject() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       queryClient.invalidateQueries({ queryKey: ['project', variables.id] })
+    },
+  })
+}
+
+export function useDeleteProject() {
+  const queryClient = useQueryClient()
+  const activeOrgId = useAuthStore((s) => s.activeOrgId)
+  return useMutation({
+    mutationFn: async (id: string) => apiDelete(`/projects/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', activeOrgId] })
     },
   })
 }

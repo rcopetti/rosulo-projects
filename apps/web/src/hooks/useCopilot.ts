@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost } from '@/lib/api/client'
+import { apiGet, apiPost, apiDelete } from '@/lib/api/client'
 import type { Conversation, Message } from '@/types'
 
 export function useConversations(projectId: string) {
@@ -54,6 +54,16 @@ export function useCreateConversation() {
   return useMutation({
     mutationFn: async (data: { project_id?: string; title: string }) =>
       apiPost<Conversation>('/copilot/conversations', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    },
+  })
+}
+
+export function useDeleteConversation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (conversationId: string) => apiDelete(`/copilot/conversations/${conversationId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] })
     },

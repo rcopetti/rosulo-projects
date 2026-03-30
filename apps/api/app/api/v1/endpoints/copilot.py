@@ -7,6 +7,7 @@ from app.api.deps import get_current_user, get_session
 from app.models.user import User
 from app.schemas.copilot import ChatRequest, ChatResponse, ConversationResponse, MessageResponse
 from app.services.ai.copilot_service import CopilotService
+from app.models.copilot import AIConversation, AIMessage
 
 router = APIRouter()
 
@@ -74,3 +75,16 @@ async def get_conversation_messages(
         )
         for m in messages
     ]
+
+
+@router.delete("/conversations/{conversation_id}", status_code=204)
+async def delete_conversation(
+    conversation_id: UUID,
+    _: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+) -> None:
+    from sqlalchemy import delete as sa_delete
+
+    await db.execute(sa_delete(AIMessage).where(AIMessage.conversation_id == conversation_id))
+    await db.execute(sa_delete(AIConversation).where(AIConversation.id == conversation_id))
+    await db.flush()

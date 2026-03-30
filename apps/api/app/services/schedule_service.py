@@ -35,6 +35,18 @@ class ScheduleService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def get_milestone(self, milestone_id: UUID) -> Milestone:
+        result = await self.db.execute(select(Milestone).where(Milestone.id == milestone_id))
+        milestone = result.scalar_one_or_none()
+        if not milestone:
+            raise NotFoundError("Milestone not found")
+        return milestone
+
+    async def delete_milestone(self, milestone_id: UUID) -> None:
+        milestone = await self.get_milestone(milestone_id)
+        await self.db.delete(milestone)
+        await self.db.flush()
+
     async def update_milestone(self, milestone_id: UUID, data: MilestoneUpdate) -> Milestone:
         result = await self.db.execute(select(Milestone).where(Milestone.id == milestone_id))
         milestone = result.scalar_one_or_none()

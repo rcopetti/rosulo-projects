@@ -11,9 +11,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { cn } from '@/lib/utils'
 import { Plus, ChevronRight, ChevronDown, Trash2, Pencil, Sparkles } from 'lucide-react'
 import type { WBSItem } from '@/types'
@@ -22,10 +22,14 @@ export function WBSPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const { data: wbsTree, isLoading } = useWBSTree(projectId!)
   const createItem = useCreateWBSItem(projectId!)
+  const updateItem = useUpdateWBSItem(projectId!)
   const deleteItem = useDeleteWBSItem(projectId!)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [parentId, setParentId] = useState<string | undefined>()
+  const [editingItem, setEditingItem] = useState<WBSItem | null>(null)
+  const [deleteItemId, setDeleteItemId] = useState<string | null>(null)
 
   const items = wbsTree?.items || []
 
@@ -41,6 +45,11 @@ export function WBSPage() {
   function handleAddItem(parent?: string) {
     setParentId(parent)
     setDialogOpen(true)
+  }
+
+  function handleEdit(item: WBSItem) {
+    setEditingItem(item)
+    setEditDialogOpen(true)
   }
 
   function handleCreate(e: React.FormEvent<HTMLFormElement>) {
@@ -59,8 +68,29 @@ export function WBSPage() {
     )
   }
 
+  function handleUpdate(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!editingItem) return
+    const formData = new FormData(e.currentTarget)
+    updateItem.mutate(
+      {
+        id: editingItem.id,
+        data: {
+          name: formData.get('name') as string,
+          description: formData.get('description') as string,
+        },
+      },
+      { onSuccess: () => setEditDialogOpen(false) }
+    )
+  }
+
   function handleDelete(id: string) {
-    deleteItem.mutate(id)
+    setDeleteItemId(id)
+  }
+
+  function confirmDelete() {
+    if (!deleteItemId) return
+    deleteItem.mutate(deleteItemId, { onSuccess: () => setDeleteItemId(null) })
   }
 
   if (isLoading) {
@@ -72,8 +102,6 @@ export function WBSPage() {
       </div>
     )
   }
-
-  const rootItems = items.filter((i) => !i.parent_id)
 
   return (
     <div className="space-y-6">
@@ -92,20 +120,20 @@ export function WBSPage() {
       </div>
 
       <div className="rounded-lg border bg-card">
-        {rootItems.length === 0 ? (
+        {items.length === 0 ? (
           <div className="flex h-32 items-center justify-center text-muted-foreground">
             <p>No WBS items yet. Create one to get started.</p>
           </div>
         ) : (
           <div className="divide-y">
-            {rootItems.map((item) => (
+            {items.map((item) => (
               <WBSTreeNode
                 key={item.id}
                 item={item}
-                allItems={items}
                 expandedIds={expandedIds}
                 onToggle={toggleExpand}
                 onAdd={handleAddItem}
+                onEdit={handleEdit}
                 onDelete={handleDelete}
               />
             ))}
@@ -139,21 +167,69 @@ export function WBSPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit WBS Item</DialogTitle>
+            <DialogDescription>Update the selected WBS element.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdate} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="wbs-edit-name">Name</Label>
+              <Input
+                id="wbs-edit-name"
+                name="name"
+                placeholder="Item name"
+                required
+                defaultValue={editingItem?.name ?? ''}
+                key={editingItem?.id}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="wbs-edit-desc">Description</Label>
+              <Input
+                id="wbs-edit-desc"
+                name="description"
+                placeholder="Optional description"
+                defaultValue={editingItem?.description ?? ''}
+                key={`${editingItem?.id}-desc`}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={updateItem.isPending}>Save Changes</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={deleteItemId !== null}
+        onOpenChange={(open) => { if (!open) setDeleteItemId(null) }}
+        title="Delete WBS Item"
+        description="Are you sure you want to delete this item? This action cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={confirmDelete}
+        isPending={deleteItem.isPending}
+      />
     </div>
   )
 }
 
 interface WBSTreeNodeProps {
   item: WBSItem
-  allItems: WBSItem[]
   expandedIds: Set<string>
   onToggle: (id: string) => void
   onAdd: (parentId: string) => void
+  onEdit: (item: WBSItem) => void
   onDelete: (id: string) => void
 }
 
-function WBSTreeNode({ item, allItems, expandedIds, onToggle, onAdd, onDelete }: WBSTreeNodeProps) {
-  const children = allItems.filter((i) => i.parent_id === item.id)
+function WBSTreeNode({ item, expandedIds, onToggle, onAdd, onEdit, onDelete }: WBSTreeNodeProps) {
+  const children = item.children || []
   const hasChildren = children.length > 0
   const isExpanded = expandedIds.has(item.id)
 
@@ -187,6 +263,9 @@ function WBSTreeNode({ item, allItems, expandedIds, onToggle, onAdd, onDelete }:
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onAdd(item.id)}>
             <Plus className="h-3.5 w-3.5" />
           </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(item)}>
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => onDelete(item.id)}>
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
@@ -199,10 +278,10 @@ function WBSTreeNode({ item, allItems, expandedIds, onToggle, onAdd, onDelete }:
             <WBSTreeNode
               key={child.id}
               item={child}
-              allItems={allItems}
               expandedIds={expandedIds}
               onToggle={onToggle}
               onAdd={onAdd}
+              onEdit={onEdit}
               onDelete={onDelete}
             />
           ))}
@@ -211,3 +290,4 @@ function WBSTreeNode({ item, allItems, expandedIds, onToggle, onAdd, onDelete }:
     </div>
   )
 }
+

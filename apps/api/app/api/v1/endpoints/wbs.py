@@ -60,6 +60,13 @@ async def delete_wbs_item(
 
 
 def _item_to_response(item: any) -> WBSItemResponse:
+    children_list = []
+    
+    if hasattr(item, "__dict__") and "children" in item.__dict__ and item.children:
+        children_list = [_item_to_response(c) for c in item.children]
+    elif not hasattr(item, "__dict__") and getattr(item, "children", None):
+        children_list = [_item_to_response(c) for c in item.children]
+
     return WBSItemResponse(
         id=str(item.id),
         project_id=str(item.project_id),
@@ -67,10 +74,10 @@ def _item_to_response(item: any) -> WBSItemResponse:
         code=item.code,
         name=item.name,
         description=item.description,
-        type=item.type.value,
+        type=item.type.value if hasattr(item.type, "value") else item.type,
         level=item.level,
         sort_order=item.sort_order,
-        children=[_item_to_response(c) for c in item.children] if item.children else [],
+        children=children_list,
         created_at=item.created_at.isoformat(),
         updated_at=item.updated_at.isoformat(),
     )

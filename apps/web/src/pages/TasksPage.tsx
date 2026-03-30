@@ -3,14 +3,15 @@ import { useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useTasks, useCreateTask, useUpdateTask } from '@/hooks/useTasks'
+import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from '@/hooks/useTasks'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Dialog,
   DialogContent,
@@ -29,9 +30,10 @@ import {
 } from '@/components/ui/select'
 import { formatDate } from '@/lib/utils'
 import { TASK_STATUSES, TASK_PRIORITIES } from '@/lib/constants'
-import { Plus, Filter } from 'lucide-react'
+import { Plus, Filter, Pencil, Trash2 } from 'lucide-react'
+import type { Task } from '@/types'
 
-const createTaskSchema = z.object({
+const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().default(''),
   status: z.string().default('todo'),
@@ -39,17 +41,20 @@ const createTaskSchema = z.object({
   due_date: z.string().optional(),
 })
 
-type CreateTaskForm = z.infer<typeof createTaskSchema>
+type TaskForm = z.infer<typeof taskSchema>
 
 export function TasksPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [deleteTask, setDeleteTask] = useState<Task | null>(null)
 
   const filters = statusFilter !== 'all' ? { status: statusFilter } : undefined
   const { data, isLoading } = useTasks(projectId!, filters)
   const createTask = useCreateTask(projectId!)
   const updateTask = useUpdateTask(projectId!)
+  const deleteTaskMutation = useDeleteTask(projectId!)
 
   const tasks = data?.items || []
 
@@ -59,22 +64,60 @@ export function TasksPage() {
     reset,
     setValue,
     formState: { errors },
-  } = useForm<CreateTaskForm>({
-    resolver: zodResolver(createTaskSchema),
+  } = useForm<TaskForm>({
+    resolver: zodResolver(taskSchema),
     defaultValues: { status: 'todo', priority: 'medium' },
   })
 
-  function onSubmit(data: CreateTaskForm) {
-    createTask.mutate(data as any, {
-      onSuccess: () => {
-        reset()
-        setDialogOpen(false)
-      },
+  function openCreateDialog() {
+    reset({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '' })
+    setEditingTask(null)
+    setDialogOpen(true)
+  }
+
+  function openEditDialog(task: Task) {
+    setEditingTask(task)
+    reset({
+      title: task.title,
+      description: task.description ?? '',
+      status: task.status,
+      priority: task.priority,
+      due_date: task.due_date ?? '',
     })
+    setDialogOpen(true)
+  }
+
+  function onSubmit(data: TaskForm) {
+    if (editingTask) {
+      updateTask.mutate(
+        { id: editingTask.id, data: data as any },
+        {
+          onSuccess: () => {
+            reset()
+            setEditingTask(null)
+            setDialogOpen(false)
+          },
+        }
+      )
+    } else {
+      createTask.mutate(data as any, {
+        onSuccess: () => {
+          reset()
+          setDialogOpen(false)
+        },
+      })
+    }
   }
 
   function handleStatusChange(taskId: string, status: string) {
     updateTask.mutate({ id: taskId, data: { status } as any })
+  }
+
+  function confirmDeleteTask() {
+    if (!deleteTask) return
+    deleteTaskMutation.mutate(deleteTask.id, {
+      onSuccess: () => setDeleteTask(null),
+    })
   }
 
   return (
@@ -99,69 +142,72 @@ export function TasksPage() {
               ))}
             </SelectContent>
           </Select>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Task
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create Task</DialogTitle>
-                <DialogDescription>Add a new task to the project.</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Title</Label>
-                  <Input placeholder="Task title" {...register('title')} />
-                  {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Textarea placeholder="Task description" {...register('description')} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Status</Label>
-                    <Select onValueChange={(v) => setValue('status', v)} defaultValue="todo">
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {TASK_STATUSES.map((s) => (
-                          <SelectItem key={s} value={s} className="capitalize">
-                            {s.replace('_', ' ')}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Priority</Label>
-                    <Select onValueChange={(v) => setValue('priority', v)} defaultValue="medium">
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {TASK_PRIORITIES.map((p) => (
-                          <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Due Date</Label>
-                  <Input type="date" {...register('due_date')} />
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={createTask.isPending}>Create</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={openCreateDialog}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Task
+          </Button>
         </div>
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingTask ? 'Edit Task' : 'Create Task'}</DialogTitle>
+            <DialogDescription>
+              {editingTask ? 'Update the task details.' : 'Add a new task to the project.'}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Title</Label>
+              <Input placeholder="Task title" {...register('title')} />
+              {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Textarea placeholder="Task description" {...register('description')} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select onValueChange={(v) => setValue('status', v)} defaultValue={editingTask?.status ?? 'todo'} key={editingTask?.id ?? 'new-status'}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TASK_STATUSES.map((s) => (
+                      <SelectItem key={s} value={s} className="capitalize">
+                        {s.replace('_', ' ')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select onValueChange={(v) => setValue('priority', v)} defaultValue={editingTask?.priority ?? 'medium'} key={editingTask?.id ? `${editingTask.id}-priority` : 'new-priority'}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TASK_PRIORITIES.map((p) => (
+                      <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Due Date</Label>
+              <Input type="date" {...register('due_date')} />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createTask.isPending || updateTask.isPending}>
+                {editingTask ? 'Save Changes' : 'Create'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <div className="space-y-3">
         {isLoading
@@ -196,6 +242,15 @@ export function TasksPage() {
                   {task.due_date && (
                     <span className="text-sm text-muted-foreground">{formatDate(task.due_date)}</span>
                   )}
+
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(task)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTask(task)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -205,6 +260,16 @@ export function TasksPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={deleteTask !== null}
+        onOpenChange={(open) => { if (!open) setDeleteTask(null) }}
+        title="Delete Task"
+        description={`Are you sure you want to delete "${deleteTask?.title}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={confirmDeleteTask}
+        isPending={deleteTaskMutation.isPending}
+      />
     </div>
   )
 }

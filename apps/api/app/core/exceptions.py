@@ -35,6 +35,11 @@ class AIBudgetExceededError(AppError):
         super().__init__(message=message, status_code=402, error_code="AI_BUDGET_EXCEEDED")
 
 
+class ConflictError(AppError):
+    def __init__(self, message: str = "Cannot delete due to existing references"):
+        super().__init__(message=message, status_code=409, error_code="CONFLICT")
+
+
 class UnauthorizedError(AppError):
     def __init__(self, message: str = "Unauthorized"):
         super().__init__(message=message, status_code=401, error_code="UNAUTHORIZED")
