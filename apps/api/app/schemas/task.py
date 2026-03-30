@@ -1,3 +1,5 @@
+from datetime import date
+
 from pydantic import BaseModel, Field
 
 
@@ -23,8 +25,8 @@ class TaskCreate(BaseModel):
     parent_task_id: str | None = None
     assigned_to: str | None = None
     estimated_hours: float | None = None
-    start_date: str | None = None
-    due_date: str | None = None
+    start_date: date | None = None
+    due_date: date | None = None
     tags: list[str] = Field(default_factory=list)
 
 
@@ -38,9 +40,9 @@ class TaskUpdate(BaseModel):
     assigned_to: str | None = None
     estimated_hours: float | None = None
     actual_hours: float | None = None
-    start_date: str | None = None
-    due_date: str | None = None
-    completed_date: str | None = None
+    start_date: date | None = None
+    due_date: date | None = None
+    completed_date: date | None = None
     completion_pct: float | None = Field(None, ge=0, le=100)
     tags: list[str] | None = None
 

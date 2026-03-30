@@ -88,9 +88,14 @@ export function TasksPage() {
   }
 
   function onSubmit(data: TaskForm) {
+    const payload = {
+      ...data,
+      due_date: data.due_date || undefined,
+    }
+
     if (editingTask) {
       updateTask.mutate(
-        { id: editingTask.id, data: data as any },
+        { id: editingTask.id, data: payload as any },
         {
           onSuccess: () => {
             reset()
@@ -100,7 +105,7 @@ export function TasksPage() {
         }
       )
     } else {
-      createTask.mutate(data as any, {
+      createTask.mutate(payload as any, {
         onSuccess: () => {
           reset()
           setDialogOpen(false)

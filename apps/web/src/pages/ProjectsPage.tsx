@@ -99,8 +99,14 @@ export function ProjectsPage() {
   }
 
   function onSubmit(data: ProjectForm) {
+    const payload = {
+      ...data,
+      start_date: data.start_date || undefined,
+      end_date: data.end_date || undefined,
+    }
+
     if (editingProject) {
-      updateProject.mutate({ id: editingProject.id, data }, {
+      updateProject.mutate({ id: editingProject.id, data: payload }, {
         onSuccess: () => {
           reset()
           setEditingProject(null)
@@ -108,7 +114,7 @@ export function ProjectsPage() {
         },
       })
     } else {
-      createProject.mutate(data, {
+      createProject.mutate(payload, {
         onSuccess: () => {
           reset()
           setDialogOpen(false)
