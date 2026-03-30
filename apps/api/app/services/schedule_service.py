@@ -65,6 +65,7 @@ class ScheduleService:
         return milestone
 
     async def get_gantt_data(self, project_id: UUID) -> dict:
+        from app.models.schedule import TaskDependency
         from app.models.wbs import Task
 
         tasks_result = await self.db.execute(
@@ -73,6 +74,14 @@ class ScheduleService:
             .order_by(Task.start_date.asc().nulls_last())
         )
         tasks = list(tasks_result.scalars().all())
+
+        task_ids = [t.id for t in tasks]
+
+        deps_result = await self.db.execute(
+            select(TaskDependency)
+            .where(TaskDependency.predecessor_id.in_(task_ids))
+        )
+        dependencies = list(deps_result.scalars().all())
 
         milestones_result = await self.db.execute(
             select(Milestone)
@@ -88,18 +97,28 @@ class ScheduleService:
                     "title": t.title,
                     "start_date": t.start_date.isoformat() if t.start_date else None,
                     "due_date": t.due_date.isoformat() if t.due_date else None,
-                    "status": t.status,
+                    "status": t.status.value if hasattr(t.status, 'value') else t.status,
                     "completion_pct": t.completion_pct,
-                    "assigned_to": str(t.assigned_to) if t.assigned_to else None,
+                    "priority": t.priority.value if hasattr(t.priority, 'value') else t.priority,
                 }
                 for t in tasks
+            ],
+            "dependencies": [
+                {
+                    "id": str(d.id),
+                    "predecessor_id": str(d.predecessor_id),
+                    "successor_id": str(d.successor_id),
+                    "type": d.type.value if hasattr(d.type, 'value') else d.type,
+                    "lag_days": d.lag_days,
+                }
+                for d in dependencies
             ],
             "milestones": [
                 {
                     "id": str(m.id),
                     "name": m.name,
                     "target_date": m.target_date.isoformat(),
-                    "status": m.status,
+                    "status": m.status.value if hasattr(m.status, 'value') else m.status,
                 }
                 for m in milestones
             ],

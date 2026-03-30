@@ -9,12 +9,17 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useMilestones, useCreateMilestone, useUpdateMilestone, useDeleteMilestone } from '@/hooks/useMilestones'
+import { useGantt } from '@/hooks/useGantt'
+import { GanttChart } from '@/components/features/schedule/GanttChart'
 import { formatDate } from '@/lib/utils'
-import { Pencil, Trash2, Plus, Flag, CalendarDays, CheckCircle2 } from 'lucide-react'
+import { Pencil, Trash2, Plus, Flag, CheckCircle2 } from 'lucide-react'
 import type { Milestone } from '@/types'
+
+type ZoomLevel = 'day' | 'week' | 'month'
 
 const milestoneSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -39,10 +44,12 @@ function getMilestoneStatus(milestone: Milestone): 'pending' | 'achieved' | 'mis
 export function SchedulePage() {
   const { projectId } = useParams<{ projectId: string }>()
   const { data: milestones } = useMilestones(projectId!)
+  const { data: ganttData, isLoading: ganttLoading } = useGantt(projectId!)
   const createMilestone = useCreateMilestone(projectId!)
   const updateMilestone = useUpdateMilestone(projectId!)
   const deleteMilestone = useDeleteMilestone(projectId!)
 
+  const [zoom, setZoom] = useState<ZoomLevel>('week')
   const [createOpen, setCreateOpen] = useState(false)
   const [editMilestone, setEditMilestone] = useState<Milestone | null>(null)
   const [deleteMilestoneId, setDeleteMilestoneId] = useState<string | null>(null)
@@ -143,88 +150,60 @@ export function SchedulePage() {
         </Dialog>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-1">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Flag className="h-4 w-4" />
-                Milestones
-              </CardTitle>
-              <CardDescription>Key project milestones</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!milestones || milestones.length === 0 ? (
-                <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-                  <p>No milestones defined yet</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {milestones.map((milestone) => {
-                    const status = getMilestoneStatus(milestone)
-                    const config = statusConfig[status]
-                    const StatusIcon = config.icon
-                    return (
-                      <div key={milestone.id} className="flex items-start gap-3 rounded-lg border p-3">
-                        <StatusIcon className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate text-sm font-medium">{milestone.name}</p>
-                            <Badge variant={config.variant}>{config.label}</Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground">{formatDate(milestone.target_date)}</p>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(milestone)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteMilestoneId(milestone.id)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+      {/* Gantt Chart */}
+      {ganttLoading ? (
+        <Skeleton className="h-[400px] w-full" />
+      ) : ganttData ? (
+        <GanttChart data={ganttData} zoom={zoom} onZoomChange={setZoom} />
+      ) : null}
 
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <CalendarDays className="h-4 w-4" />
-                Gantt Chart
-              </CardTitle>
-              <CardDescription>Visual project timeline</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[400px] items-center justify-center rounded-lg border border-dashed text-muted-foreground">
-                <div className="text-center">
-                  <CalendarDays className="mx-auto mb-2 h-8 w-8 opacity-50" />
-                  <p className="font-medium">Gantt Chart</p>
-                  <p className="text-sm">Timeline visualization will appear here</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
+      {/* Milestones */}
       <Card>
         <CardHeader>
-          <CardTitle>Critical Path</CardTitle>
-          <CardDescription>Automatically calculated critical path analysis</CardDescription>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Flag className="h-4 w-4" />
+            Milestones
+          </CardTitle>
+          <CardDescription>Key project milestones</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex h-32 items-center justify-center rounded-lg border border-dashed text-muted-foreground">
-            <p>Critical path analysis requires tasks with dependencies and durations</p>
-          </div>
+          {!milestones || milestones.length === 0 ? (
+            <div className="flex h-20 items-center justify-center text-sm text-muted-foreground">
+              <p>No milestones defined yet</p>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {milestones.map((milestone) => {
+                const status = getMilestoneStatus(milestone)
+                const config = statusConfig[status]
+                const StatusIcon = config.icon
+                return (
+                  <div key={milestone.id} className="flex items-start gap-3 rounded-lg border p-3">
+                    <StatusIcon className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-medium">{milestone.name}</p>
+                        <Badge variant={config.variant}>{config.label}</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{formatDate(milestone.target_date)}</p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(milestone)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteMilestoneId(milestone.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 
+      {/* Edit Milestone Dialog */}
       <Dialog open={!!editMilestone} onOpenChange={(open) => !open && setEditMilestone(null)}>
         <DialogContent>
           <DialogHeader>
